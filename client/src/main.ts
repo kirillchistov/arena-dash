@@ -159,29 +159,31 @@ const inputState = {
 const nickname = `Player${Math.floor(Math.random() * 1000)}`;
 
 // ---------------------- Рендер ----------------------
+function gameLoop() {
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+requestAnimationFrame(gameLoop);
 
 function draw() {
   if (!ctx || !canvas) {
     throw new Error('2D context not supported');
   }
 
-  ctx.fillStyle = '#181818';
+    ctx.fillStyle = '#181818';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // Рамка арены примерно - надо синхронизировать позже.
-  const arenaX = 40;
-  const arenaY = 40;
-  const arenaWidth = canvas.width - 80;
-  const arenaHeight = canvas.height - 120; // чуть больше места снизу под текст
-
+  // рамка арены
   ctx.strokeStyle = '#444';
   ctx.lineWidth = 4;
-  ctx.strokeRect(arenaX, arenaY, arenaWidth, arenaHeight);
+  ctx.strokeRect(40, 40, canvas.width - 80, canvas.height - 120);
 
   const sortedPlayers = [...players].sort((a, b) => b.score - a.score);
 
   for (const p of sortedPlayers) {
     const isMe = p.id === myPlayerId;
+
     ctx.beginPath();
     ctx.arc(p.x, p.y, isMe ? 18 : 14, 0, Math.PI * 2);
     ctx.fillStyle = isMe ? '#4caf50' : '#2196f3';
@@ -245,6 +247,60 @@ function draw() {
     canvas.height - 40
   );
 }
+
+// ---------------------- Обработка инпута (WASD / стрелки) ----------------------
+
+window.addEventListener('keydown', (e) => {
+  if (e.repeat) return;
+
+  switch (e.key) {
+    case 'w':
+    case 'W':
+    case 'ArrowUp':
+      inputState.up = true;
+      break;
+    case 's':
+    case 'S':
+    case 'ArrowDown':
+      inputState.down = true;
+      break;
+    case 'a':
+    case 'A':
+    case 'ArrowLeft':
+      inputState.left = true;
+      break;
+    case 'd':
+    case 'D':
+    case 'ArrowRight':
+      inputState.right = true;
+      break;
+  }
+});
+
+window.addEventListener('keyup', (e) => {
+  switch (e.key) {
+    case 'w':
+    case 'W':
+    case 'ArrowUp':
+      inputState.up = false;
+      break;
+    case 's':
+    case 'S':
+    case 'ArrowDown':
+      inputState.down = false;
+      break;
+    case 'a':
+    case 'A':
+    case 'ArrowLeft':
+      inputState.left = false;
+      break;
+    case 'd':
+    case 'D':
+    case 'ArrowRight':
+      inputState.right = false;
+      break;
+  }
+});
 
 
 // Периодическая отправка инпута (20 раз/сек).
