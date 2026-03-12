@@ -18,7 +18,13 @@ type ServerToClientMessage =
   | { type: 'joined'; playerId: string }
   | {
       type: 'state';
-      players: Array<{ id: string; nickname: string; x: number; y: number }>;
+      players: Array<{
+        id: string;
+        nickname: string;
+        x: number;
+        y: number;
+        score: number;
+      }>;
     };
 
 type ClientToServerMessage =
@@ -55,7 +61,13 @@ let socket: WebSocket | null = null;
 let myPlayerId: string | null = null;
 
 // Игроки, пришедшие со state от сервера.
-let players: Array<{ id: string; nickname: string; x: number; y: number }> = [];
+let players: Array<{
+    id: string;
+    nickname: string;
+    x: number;
+    y: number;
+    score: number;
+}> = [];
 
 // Состояние ввода (WASD).
 const inputState = {
@@ -75,15 +87,18 @@ function draw() {
     throw new Error('2D context not supported');
   }
 
-  ctx.fillStyle = '#181818';
+    ctx.fillStyle = '#181818';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   ctx.strokeStyle = '#444';
   ctx.lineWidth = 4;
   ctx.strokeRect(40, 40, canvas.width - 80, canvas.height - 80);
 
-  // Рендерим всех игроков из массива players.
-  for (const p of players) {
+  // Сортируем игроков по убыванию score для рендера и для лидерборда.
+  const sortedPlayers = [...players].sort((a, b) => b.score - a.score);
+
+  // Рендерим сущности игроков.
+  for (const p of sortedPlayers) {
     const isMe = p.id === myPlayerId;
     ctx.beginPath();
     ctx.arc(p.x, p.y, isMe ? 18 : 14, 0, Math.PI * 2);
@@ -92,18 +107,48 @@ function draw() {
     ctx.strokeStyle = '#ffffff';
     ctx.stroke();
 
-    // Никнейм.
     ctx.fillStyle = '#ffffff';
     ctx.font = '12px system-ui';
     ctx.textAlign = 'center';
     ctx.fillText(p.nickname, p.x, p.y - 20);
   }
 
+  // Leaderboard в правом верхнем углу.
+  const boardX = canvas.width - 220;
+  const boardY = 60;
+
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+  ctx.fillRect(boardX, boardY, 180, 20 + 18 * Math.min(5, sortedPlayers.length));
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '12px system-ui';
+  ctx.textAlign = 'left';
+  ctx.fillText('Leaderboard', boardX + 8, boardY + 14);
+
+  const maxEntries = 5;
+  for (let i = 0; i < Math.min(maxEntries, sortedPlayers.length); i++) {
+    const p = sortedPlayers[i];
+    const isMe = p.id === myPlayerId;
+    const lineY = boardY + 14 + 16 * (i + 1);
+
+    ctx.fillStyle = isMe ? '#ffeb3b' : '#ffffff';
+    const scoreText = p.score.toFixed(1); // округляем для красоты
+
+    ctx.fillText(`${i + 1}. ${p.nickname}`, boardX + 8, lineY);
+    ctx.textAlign = 'right';
+    ctx.fillText(scoreText, boardX + 172, lineY);
+    ctx.textAlign = 'left';
+  }
+
   // Подсказка.
   ctx.fillStyle = '#ffffff';
   ctx.font = '12px system-ui';
   ctx.textAlign = 'left';
-  ctx.fillText('Use WASD to move (prototype, no collisions yet)', 50, canvas.height - 40);
+  ctx.fillText(
+    'Use WASD to move (prototype scoring = time while moving)',
+    50,
+    canvas.height - 40
+  );
 }
 
 function gameLoop() {
