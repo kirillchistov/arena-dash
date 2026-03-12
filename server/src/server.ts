@@ -65,6 +65,8 @@ type Player = {
   vy: number;
   score: number; // добавили счет игрока
   socket: WebSocket;
+  speedMultiplier: number;
+  shieldTicks: number;
 };
 
 type Pickup = {
@@ -72,7 +74,10 @@ type Pickup = {
   x: number;
   y: number;
   value: number;
+  kind: PowerUpType;
 };
+
+type PowerUpType = 'speed' | 'shield';
 
 // Простое in-memory "хранилище" игроков.
 const players = new Map<string, Player>();
@@ -134,6 +139,8 @@ wss.on('connection', (ws: WebSocket, req) => {
     if (msg.type === 'join') {
       if (playerId) {
         console.warn('[WS] player already joined, ignoring duplicate join');
+        speedMultiplier: 1;
+        shieldTicks: 0;
         return;
       }
       const id = randomUUID();
@@ -143,12 +150,15 @@ wss.on('connection', (ws: WebSocket, req) => {
         id,
         nickname: msg.nickname || 'Anonymous',
         x: 100 + Math.random() * 400,
-        y: 100 + Math.random() * 200, // можно поправить позже, сейчас не критично
+        y: 100 + Math.random() * 200,
         vx: 0,
         vy: 0,
-        score: 0, // начальный счет 0
+        score: 0,
+        speedMultiplier: 1,
+        shieldTicks: 0,
         socket: ws
       };
+
       players.set(id, player);
 
       const joined: ServerToClientMessage = {
@@ -235,8 +245,15 @@ function gameLoop() {
 
   // Обновляем позиции игроков и ограничиваем ареной.
   players.forEach((player) => {
-    player.x += player.vx * dt;
-    player.y += player.vy * dt;
+    if (player.shieldTicks > 0) {
+        player.shieldTicks -= 1;
+    } else {
+        player.shieldTicks = 0;
+    }
+
+    const effectiveSpeedMultiplier = player.speedMultiplier;
+    player.x += player.vx * dt * effectiveSpeedMultiplier;
+    player.y += player.vy * dt * effectiveSpeedMultiplier;
 
     player.x = clamp(player.x, ARENA.xMin, ARENA.xMax);
     player.y = clamp(player.y, ARENA.yMin, ARENA.yMax);
@@ -291,7 +308,18 @@ function gameLoop() {
       const radiusSum = PICKUP_RADIUS + 14; // радиус игрока
 
       if (distSq <= radiusSum * radiusSum) {
+        // базовые очки
         player.score += pickup.value;
+
+        // эффект
+        if (pickup.kind === 'speed') {
+            player.speedMultiplier = 1.8;
+            // эффект продлится несколько тиков — например, 3 секунды
+            player.shieldTicks = player.shieldTicks; // без изменения
+        } else if (pickup.kind === 'shield') {
+            player.shieldTicks = 60; // 60 тиков ~ 3 секунды при 20 тиках/сек
+        }
+
         pickups.delete(id);
         spawnRandomPickup();
         break;
@@ -330,11 +358,15 @@ function gameLoop() {
 // -------------------- Возобновление пикапов --------------------
 function spawnRandomPickup() {
   const id = randomUUID();
+  const kinds: PowerUpType[] = ['speed', 'shield'];
+  const kind = kinds[Math.floor(Math.random() * kinds.length)];
+
   const pickup: Pickup = {
     id,
     x: ARENA.xMin + 40 + Math.random() * (ARENA.xMax - ARENA.xMin - 80),
     y: ARENA.yMin + 40 + Math.random() * (ARENA.yMax - ARENA.yMin - 80),
-    value: 10
+    value: 10,
+    kind
   };
   pickups.set(id, pickup);
 }
@@ -349,6 +381,8 @@ function resetMatch() {
     p.vx = 0;
     p.vy = 0;
     p.score = 0;
+    speedMultiplier: 1;
+    shieldTicks: 0;
   });
 
   pickups.clear();
