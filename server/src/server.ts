@@ -33,6 +33,8 @@ type ServerToClientMessage =
   | { type: 'joined'; playerId: string }
   | {
       type: 'state';
+      matchId: number;
+      timeLeft: number; // секунды до конца матча
       players: Array<{
         id: string;
         nickname: string;
@@ -64,6 +66,19 @@ app.get('/health', (_req: Request, res: Response) => {
 
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
+
+// -------------------- Константы арены и матча --------------------
+
+const ARENA = {
+  xMin: 60,
+  yMin: 60,
+  xMax: 740, // подгоним под размер Canvas позже, пока константы
+  yMax: 540
+};
+
+const MATCH_DURATION_SECONDS = 60; // длительность матча
+let matchTimeLeft = MATCH_DURATION_SECONDS;
+let matchId = 1; // счётчик матчей
 
 // -------------------- Обработчики WebSocket --------------------
 
@@ -148,6 +163,11 @@ wss.on('connection', (ws: WebSocket, req) => {
   });
 });
 
+// --------------------- Границы арены + клэмп позиций -------------------
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
 // -------------------- Игровой цикл и рассылка state --------------------
 
 // Дельта по времени в секундах.
@@ -158,28 +178,47 @@ function gameLoop() {
   const dt = (now - lastUpdate) / 1000;
   lastUpdate = now;
 
-  // Обновляем позиции всех игроков.
-  // Очки вместо тиков потом заменим на столкновения, pickup’ы и т.д.
+  // Обновляем таймер матча.
+  matchTimeLeft -= dt;
+  if (matchTimeLeft <= 0) {
+    // Матч закончился — делаем "рестарт":
+    matchId += 1;
+    matchTimeLeft = MATCH_DURATION_SECONDS;
+
+    // Сбрасываем позиции и счёт всех игроков.
+    players.forEach((p) => {
+      p.x = 100 + Math.random() * 400;
+      p.y = 100 + Math.random() * 200;
+      p.vx = 0;
+      p.vy = 0;
+      p.score = 0;
+    });
+  }
+
+  // Обновляем позиции игроков и ограничиваем ареной.
   players.forEach((player) => {
     player.x += player.vx * dt;
     player.y += player.vy * dt;
 
+    player.x = clamp(player.x, ARENA.xMin, ARENA.xMax);
+    player.y = clamp(player.y, ARENA.yMin, ARENA.yMax);
+
     const isMoving = player.vx !== 0 || player.vy !== 0;
     if (isMoving) {
-        player.score += dt; // "очки за каждый тик движения"
+      player.score += dt;
     }
-    // TODO: добавить ограничения по границам арены
   });
 
-  // Рассылаем состояние всем подключённым игрокам.
   const snapshot: ServerToClientMessage = {
     type: 'state',
+    matchId,
+    timeLeft: matchTimeLeft,
     players: Array.from(players.values()).map((p) => ({
       id: p.id,
       nickname: p.nickname,
       x: p.x,
       y: p.y,
-      score: p.score // добавляем счет в состояние
+      score: p.score
     }))
   };
 
