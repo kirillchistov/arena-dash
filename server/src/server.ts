@@ -33,7 +33,13 @@ type ServerToClientMessage =
   | { type: 'joined'; playerId: string }
   | {
       type: 'state';
-      players: Array<{ id: string; nickname: string; x: number; y: number }>;
+      players: Array<{
+        id: string;
+        nickname: string;
+        x: number;
+        y: number;
+        score: number;
+      }>;
     };
 
 type Player = {
@@ -43,6 +49,7 @@ type Player = {
   y: number;
   vx: number;
   vy: number;
+  score: number; // добавили счет игрока
   socket: WebSocket;
 };
 
@@ -101,6 +108,7 @@ wss.on('connection', (ws: WebSocket, req) => {
         y: 100 + Math.random() * 200, // можно поправить позже, сейчас не критично
         vx: 0,
         vy: 0,
+        score: 0, // начальный счет 0
         socket: ws
       };
       players.set(id, player);
@@ -151,9 +159,15 @@ function gameLoop() {
   lastUpdate = now;
 
   // Обновляем позиции всех игроков.
+  // Очки вместо тиков потом заменим на столкновения, pickup’ы и т.д.
   players.forEach((player) => {
     player.x += player.vx * dt;
     player.y += player.vy * dt;
+
+    const isMoving = player.vx !== 0 || player.vy !== 0;
+    if (isMoving) {
+        player.score += dt; // "очки за каждый тик движения"
+    }
     // TODO: добавить ограничения по границам арены
   });
 
@@ -164,7 +178,8 @@ function gameLoop() {
       id: p.id,
       nickname: p.nickname,
       x: p.x,
-      y: p.y
+      y: p.y,
+      score: p.score // добавляем счет в состояние
     }))
   };
 
