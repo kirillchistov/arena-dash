@@ -1,0 +1,13 @@
+{
+  "name": "arena-dash",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "concurrently \"pnpm --filter arena-dash-client dev\" \"pnpm --filter arena-dash-server dev\"",
+    "dev:client": "pnpm --filter arena-dash-client dev",
+    "dev:server": "pnpm --filter arena-dash-server dev"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

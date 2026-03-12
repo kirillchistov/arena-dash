@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Arena Dash</title>
+    <style>
+      /* На время прототипа растягиваем canvas на окно. */
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #111;
+        color: #fff;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      }
+
+      #game {
+        display: block;
+        margin: 0;
+        background: #202020;
+      }
+
+      .overlay {
+        position: fixed;
+        left: 8px;
+        top: 8px;
+        padding: 4px 8px;
+        background: rgba(0, 0, 0, 0.4);
+        border-radius: 4px;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="game"></canvas>
+    <div class="overlay" id="ws-status">WS: disconnected</div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
