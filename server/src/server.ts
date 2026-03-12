@@ -28,13 +28,14 @@ type ClientToServerMessage =
   | { type: 'join'; nickname: string }
   | { type: 'input'; input: { dx: number; dy: number } };
 
-type ServerToClientMessage =
+  // Расширяем под pickups
+  type ServerToClientMessage =
   | { type: 'welcome'; message: string }
   | { type: 'joined'; playerId: string }
   | {
       type: 'state';
       matchId: number;
-      timeLeft: number; // секунды до конца матча
+      timeLeft: number;
       players: Array<{
         id: string;
         nickname: string;
@@ -42,6 +43,17 @@ type ServerToClientMessage =
         y: number;
         score: number;
       }>;
+      pickups: Array<{
+        id: string;
+        x: number;
+        y: number;
+        value: number;
+      }>;
+    }
+  | {
+      type: 'matchEnd';
+      matchId: number;
+      winner: { id: string; nickname: string; score: number } | null;
     };
 
 type Player = {
@@ -55,8 +67,19 @@ type Player = {
   socket: WebSocket;
 };
 
+type Pickup = {
+  id: string;
+  x: number;
+  y: number;
+  value: number;
+};
+
 // Простое in-memory "хранилище" игроков.
 const players = new Map<string, Player>();
+// Коллекция Pickups для начисления баллов
+const pickups = new Map<string, Pickup>();
+
+
 
 const app = express();
 
@@ -181,19 +204,32 @@ function gameLoop() {
   // Обновляем таймер матча.
   matchTimeLeft -= dt;
   if (matchTimeLeft <= 0) {
-    // Матч закончился — делаем "рестарт":
-    matchId += 1;
-    matchTimeLeft = MATCH_DURATION_SECONDS;
-
-    // Сбрасываем позиции и счёт всех игроков.
+    // определяем победителя
+    let winner: { id: string; nickname: string; score: number } | null = null;
     players.forEach((p) => {
-      p.x = 100 + Math.random() * 400;
-      p.y = 100 + Math.random() * 200;
-      p.vx = 0;
-      p.vy = 0;
-      p.score = 0;
+      if (!winner || p.score > winner.score) {
+        winner = { id: p.id, nickname: p.nickname, score: p.score };
+      }
     });
+
+    const endMsg: ServerToClientMessage = {
+      type: 'matchEnd',
+      matchId,
+      winner
+    };
+    const endPayload = JSON.stringify(endMsg);
+
+    wss.clients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(endPayload);
+      }
+    });
+
+    resetMatch();
   }
+
+  // Коллизии игрок ↔ pickup
+  const PICKUP_RADIUS = 16;
 
   // Обновляем позиции игроков и ограничиваем ареной.
   players.forEach((player) => {
@@ -202,23 +238,41 @@ function gameLoop() {
 
     player.x = clamp(player.x, ARENA.xMin, ARENA.xMax);
     player.y = clamp(player.y, ARENA.yMin, ARENA.yMax);
-
-    const isMoving = player.vx !== 0 || player.vy !== 0;
-    if (isMoving) {
-      player.score += dt;
-    }
   });
+
+  // отдельный проход по pickup’ам
+  for (const [id, pickup] of pickups) {
+    for (const player of players.values()) {
+      const dx = player.x - pickup.x;
+      const dy = player.y - pickup.y;
+      const distSq = dx * dx + dy * dy;
+      const radiusSum = PICKUP_RADIUS + 14; // радиус игрока
+
+      if (distSq <= radiusSum * radiusSum) {
+        player.score += pickup.value;
+        pickups.delete(id);
+        spawnRandomPickup();
+        break;
+      }
+    }
+  }
 
   const snapshot: ServerToClientMessage = {
     type: 'state',
     matchId,
     timeLeft: matchTimeLeft,
     players: Array.from(players.values()).map((p) => ({
-      id: p.id,
-      nickname: p.nickname,
-      x: p.x,
-      y: p.y,
-      score: p.score
+        id: p.id,
+        nickname: p.nickname,
+        x: p.x,
+        y: p.y,
+        score: p.score
+    })),
+    pickups: Array.from(pickups.values()).map((pk) => ({
+        id: pk.id,
+        x: pk.x,
+        y: pk.y,
+        value: pk.value
     }))
   };
 
@@ -230,6 +284,38 @@ function gameLoop() {
     }
   });
 }
+
+// -------------------- Возобновление пикапов --------------------
+function spawnRandomPickup() {
+  const id = randomUUID();
+  const pickup: Pickup = {
+    id,
+    x: ARENA.xMin + 40 + Math.random() * (ARENA.xMax - ARENA.xMin - 80),
+    y: ARENA.yMin + 40 + Math.random() * (ARENA.yMax - ARENA.yMin - 80),
+    value: 10
+  };
+  pickups.set(id, pickup);
+}
+
+function resetMatch() {
+  matchId += 1;
+  matchTimeLeft = MATCH_DURATION_SECONDS;
+
+  players.forEach((p) => {
+    p.x = 100 + Math.random() * 400;
+    p.y = 100 + Math.random() * 200;
+    p.vx = 0;
+    p.vy = 0;
+    p.score = 0;
+  });
+
+  pickups.clear();
+  for (let i = 0; i < 5; i++) {
+    spawnRandomPickup();
+  }
+}
+
+resetMatch(); // сразу один матч при старте сервера
 
 // 20 тиков в секунду — достаточно для простого прототипа.
 setInterval(gameLoop, 50);
