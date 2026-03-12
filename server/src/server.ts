@@ -98,7 +98,7 @@ wss.on('connection', (ws: WebSocket, req) => {
         id,
         nickname: msg.nickname || 'Anonymous',
         x: 100 + Math.random() * 400,
-        y: 100 + Math.random * 200, // можно поправить позже, сейчас не критично
+        y: 100 + Math.random() * 200, // можно поправить позже, сейчас не критично
         vx: 0,
         vy: 0,
         socket: ws
