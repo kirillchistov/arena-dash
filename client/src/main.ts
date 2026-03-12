@@ -13,6 +13,29 @@
  * - Input шлётся по таймеру, не по каждому keydown (для простоты).
  */
 
+const fighterImages = [
+  new Image(),
+  new Image(),
+  new Image()
+];
+fighterImages[0].src = '/assets/fighter1.png';
+fighterImages[1].src = '/assets/fighter2.png';
+fighterImages[2].src = '/assets/fighter3.png';
+
+const monsterImages = [
+  new Image(),
+  new Image()
+];
+monsterImages[0].src = '/assets/monster1.png';
+monsterImages[1].src = '/assets/monster2.png';
+
+const fighterReady = Promise.all(
+  fighterImages.map((img) => img.decode().catch(() => {}))
+);
+const monsterReady = Promise.all(
+  monsterImages.map((img) => img.decode().catch(() => {}))
+);
+
 type ServerToClientMessage =
   | { type: 'welcome'; message: string }
   | { type: 'joined'; playerId: string }
@@ -43,6 +66,17 @@ type ServerToClientMessage =
 type ClientToServerMessage =
   | { type: 'join'; nickname: string }
   | { type: 'input'; input: { dx: number; dy: number } };
+
+type RenderPlayer = {
+  id: string;
+  nickname: string;
+  x: number;
+  y: number;
+  score: number;
+  skinIndex: number;
+};
+
+let renderPlayers = new Map<string, RenderPlayer>();
 
 const canvas = document.getElementById('game') as HTMLCanvasElement | null;
 const wsStatusEl = document.getElementById('ws-status');
@@ -126,10 +160,39 @@ function connectWebSocket() {
     if (msg.type === 'state') {
       currentMatchId = msg.matchId;
       timeLeft = msg.timeLeft;
-      players = msg.players;
       pickups = msg.pickups;
+
+      for (const sp of msg.players) {
+        let rp = renderPlayers.get(sp.id);
+        if (!rp) {
+        rp = {
+            id: sp.id,
+            nickname: sp.nickname,
+            x: sp.x,
+            y: sp.y,
+            score: sp.score,
+            skinIndex: Math.floor(Math.random() * fighterImages.length)
+        };
+        renderPlayers.set(sp.id, rp);
+        } else {
+        rp.x = sp.x;
+        rp.y = sp.y;
+        rp.score = sp.score;
+        rp.nickname = sp.nickname;
+        }
+      }
+
+      // чистим тех, кого нет в state
+      for (const id of renderPlayers.keys()) {
+        if (!msg.players.find((p) => p.id === id)) {
+          renderPlayers.delete(id);
+        }
+      }
+
+      players = msg.players;
       return;
     }
+
 
     if (msg.type === 'matchEnd') {
       if (msg.winner) {
@@ -228,20 +291,56 @@ function draw() {
 
   const sortedPlayers = [...players].sort((a, b) => b.score - a.score);
 
-  for (const p of sortedPlayers) {
-    const isMe = p.id === myPlayerId;
+//   for (const p of sortedPlayers) {
+//     const isMe = p.id === myPlayerId;
 
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, isMe ? 18 : 14, 0, Math.PI * 2);
-    ctx.fillStyle = isMe ? '#4caf50' : '#2196f3';
-    ctx.fill();
-    ctx.strokeStyle = '#ffffff';
-    ctx.stroke();
+//     ctx.beginPath();
+//     ctx.arc(p.x, p.y, isMe ? 18 : 14, 0, Math.PI * 2);
+//     ctx.fillStyle = isMe ? '#4caf50' : '#2196f3';
+//     ctx.fill();
+//     ctx.strokeStyle = '#ffffff';
+//     ctx.stroke();
+
+//     ctx.fillStyle = '#ffffff';
+//     ctx.font = '12px system-ui';
+//     ctx.textAlign = 'center';
+//     ctx.fillText(p.nickname, p.x, p.y - 20);
+//   }
+
+  for (const rp of renderPlayers.values()) {
+    const isMe = rp.id === myPlayerId;
+    const img = fighterImages[rp.skinIndex] ?? null;
+    const radius = isMe ? 26 : 22;
+
+    if (img && img.complete) {
+      const size = radius * 2;
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(rp.x, rp.y, radius, 0, Math.PI * 2);
+      ctx.closePath();
+      ctx.clip();
+      ctx.drawImage(img, rp.x - radius, rp.y - radius, size, size);
+      ctx.restore();
+
+      ctx.strokeStyle = isMe ? '#ffeb3b' : '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(rp.x, rp.y, radius, 0, Math.PI * 2);
+      ctx.stroke();
+    } else {
+      // fall-back: старый круг
+      ctx.beginPath();
+      ctx.arc(rp.x, rp.y, radius, 0, Math.PI * 2);
+      ctx.fillStyle = isMe ? '#4caf50' : '#2196f3';
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+    }
 
     ctx.fillStyle = '#ffffff';
     ctx.font = '12px system-ui';
     ctx.textAlign = 'center';
-    ctx.fillText(p.nickname, p.x, p.y - 20);
+    ctx.fillText(rp.nickname, rp.x, rp.y - radius - 6);
   }
 
   // Leaderboard (как раньше).
@@ -296,12 +395,25 @@ function draw() {
 
   // pickup’ы (монетки/сферы)
   for (const pk of pickups) {
-    ctx.beginPath();
-    ctx.arc(pk.x, pk.y, 10, 0, Math.PI * 2);
-    ctx.fillStyle = '#ff9800';
-    ctx.fill();
-    ctx.strokeStyle = '#ffffff';
-    ctx.stroke();
+    const img = monsterImages[pk.value % monsterImages.length] ?? null;
+    const radius = 16;
+    if (img && img.complete) {
+        const size = radius * 2;
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(pk.x, pk.y, radius, 0, Math.PI * 2);
+        ctx.closePath();
+        ctx.clip();
+        ctx.drawImage(img, pk.x - radius, pk.y - radius, size, size);
+        ctx.restore();
+    } else {
+        ctx.beginPath();
+        ctx.arc(pk.x, pk.y, radius, 0, Math.PI * 2);
+        ctx.fillStyle = '#ff9800';
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.stroke();
+    }
   }
 
   // Оверлей окончания матча
