@@ -27,6 +27,17 @@ type ServerToClientMessage =
         y: number;
         score: number;
       }>;
+      pickups: Array<{
+        id: string;
+        x: number;
+        y: number;
+        value: number;
+      }>;
+    }
+  | {
+      type: 'matchEnd';
+      matchId: number;
+      winner: { id: string; nickname: string; score: number } | null;
     };
 
 type ClientToServerMessage =
@@ -116,6 +127,30 @@ function connectWebSocket() {
       currentMatchId = msg.matchId;
       timeLeft = msg.timeLeft;
       players = msg.players;
+      pickups = msg.pickups;
+      return;
+    }
+
+    if (msg.type === 'matchEnd') {
+      if (msg.winner) {
+        lastMatchResult = {
+          matchId: msg.matchId,
+          winnerName: msg.winner.nickname,
+          winnerScore: msg.winner.score
+        };
+      } else {
+        lastMatchResult = {
+          matchId: msg.matchId,
+          winnerName: 'No winner',
+          winnerScore: null
+        };
+      }
+      showMatchOverlay = true;
+
+      // убираем оверлей через пару секунд
+      setTimeout(() => {
+        showMatchOverlay = false;
+      }, 3000);
       return;
     }
   });
@@ -136,16 +171,28 @@ function connectWebSocket() {
 connectWebSocket();
 
 // Игроки, пришедшие со state от сервера.
-let players: Array<{
+let players = [] as Array<{
   id: string;
   nickname: string;
   x: number;
   y: number;
   score: number;
-}> = [];
+}>;
+
+let pickups = [] as Array<{
+  id: string;
+  x: number;
+  y: number;
+  value: number;
+}>;
 
 let currentMatchId: number | null = null;
-let timeLeft: number = 0;
+let timeLeft = 0;
+
+let lastMatchResult:
+  | { matchId: number; winnerName: string; winnerScore: number | null }
+  | null = null;
+let showMatchOverlay = false;
 
 // Состояние ввода (WASD).
 const inputState = {
@@ -171,7 +218,7 @@ function draw() {
     throw new Error('2D context not supported');
   }
 
-    ctx.fillStyle = '#181818';
+  ctx.fillStyle = '#181818';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   // рамка арены
@@ -242,10 +289,67 @@ function draw() {
   ctx.font = '12px system-ui';
   ctx.textAlign = 'left';
   ctx.fillText(
-    'Use WASD to move. Score = time while moving. Match resets every 60s.',
+    'Use WASD to move. Score = pickups. Match resets every 60s.',
     50,
     canvas.height - 40
   );
+
+  // pickup’ы (монетки/сферы)
+  for (const pk of pickups) {
+    ctx.beginPath();
+    ctx.arc(pk.x, pk.y, 10, 0, Math.PI * 2);
+    ctx.fillStyle = '#ff9800';
+    ctx.fill();
+    ctx.strokeStyle = '#ffffff';
+    ctx.stroke();
+  }
+
+  // Оверлей окончания матча
+  if (showMatchOverlay && lastMatchResult) {
+    const overlayWidth = 320;
+    const overlayHeight = 120;
+    const ox = (canvas.width - overlayWidth) / 2;
+    const oy = (canvas.height - overlayHeight) / 2;
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+    ctx.fillRect(ox, oy, overlayWidth, overlayHeight);
+
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(ox, oy, overlayWidth, overlayHeight);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.font = '18px system-ui';
+    ctx.fillText(
+        `Match ${lastMatchResult.matchId} finished`,
+        ox + overlayWidth / 2,
+        oy + 32
+    );
+
+    ctx.font = '16px system-ui';
+
+    if (lastMatchResult.winnerScore !== null) {
+        ctx.fillText(
+        `Winner: ${lastMatchResult.winnerName} (${lastMatchResult.winnerScore} pts)`,
+        ox + overlayWidth / 2,
+        oy + 64
+        );
+    } else {
+        ctx.fillText(
+        'No winner this time',
+        ox + overlayWidth / 2,
+        oy + 64
+        );
+    }
+
+    ctx.font = '14px system-ui';
+    ctx.fillText(
+        'New match starting...',
+        ox + overlayWidth / 2,
+        oy + 94
+    );
+  }
 }
 
 // ---------------------- Обработка инпута (WASD / стрелки) ----------------------
