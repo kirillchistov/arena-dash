@@ -230,6 +230,8 @@ function gameLoop() {
 
   // Коллизии игрок ↔ pickup
   const PICKUP_RADIUS = 16;
+  const PLAYER_RADIUS = 14;
+  const KNOCKBACK_STRENGTH = 250;
 
   // Обновляем позиции игроков и ограничиваем ареной.
   players.forEach((player) => {
@@ -239,6 +241,46 @@ function gameLoop() {
     player.x = clamp(player.x, ARENA.xMin, ARENA.xMax);
     player.y = clamp(player.y, ARENA.yMin, ARENA.yMax);
   });
+
+  const playerList = Array.from(players.values());
+
+  for (let i = 0; i < playerList.length; i++) {
+    for (let j = i + 1; j < playerList.length; j++) {
+      const a = playerList[i];
+      const b = playerList[j];
+
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const distSq = dx * dx + dy * dy;
+      const minDist = PLAYER_RADIUS * 2;
+      if (distSq > minDist * minDist) continue;
+
+      const dist = Math.max(Math.sqrt(distSq), 0.001);
+      const nx = dx / dist;
+      const ny = dy / dist;
+
+      // Нокбэк в противоположные стороны
+      a.vx -= nx * KNOCKBACK_STRENGTH;
+      a.vy -= ny * KNOCKBACK_STRENGTH;
+      b.vx += nx * KNOCKBACK_STRENGTH;
+      b.vy += ny * KNOCKBACK_STRENGTH;
+
+      // Простейший "демпфинг"
+      a.vx *= 0.6;
+      a.vy *= 0.6;
+      b.vx *= 0.6;
+      b.vy *= 0.6;
+
+      // Очки: кто имел большую скорость, тот получает балл за «таран»
+      const aSpeedSq = a.vx * a.vx + a.vy * a.vy;
+      const bSpeedSq = b.vx * b.vx + b.vy * b.vy;
+      if (aSpeedSq > bSpeedSq) {
+        a.score += 5;
+      } else if (bSpeedSq > aSpeedSq) {
+        b.score += 5;
+      }
+    }
+  }
 
   // отдельный проход по pickup’ам
   for (const [id, pickup] of pickups) {
