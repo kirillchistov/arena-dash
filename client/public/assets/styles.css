@@ -1,0 +1,124 @@
+html,
+body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+    background: #111;
+    color: #fff;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+#game {
+    display: block;
+    margin: 0;
+    background: #202020;
+}
+
+.overlay {
+    position: fixed;
+    left: 8px;
+    top: 8px;
+    padding: 4px 8px;
+    background: rgba(0, 0, 0, 0.4);
+    border-radius: 4px;
+    font-size: 12px;
+    z-index: 10;
+}
+
+.start-screen {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(circle at top, #222 0, #000 55%);
+    z-index: 20;
+}
+
+.start-card {
+    width: min(520px, 100% - 32px);
+    background: rgba(0, 0, 0, 0.75);
+    border-radius: 12px;
+    padding: 24px 28px 20px;
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.start-title {
+    margin: 0 0 8px;
+    font-size: 24px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.start-subtitle {
+    margin: 0 0 16px;
+    font-size: 14px;
+    color: #ccc;
+}
+
+.start-section {
+    margin-top: 12px;
+}
+
+.start-section h2 {
+    margin: 0 0 4px;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #aaa;
+}
+
+.start-list {
+    margin: 4px 0 0;
+    padding-left: 18px;
+    font-size: 13px;
+    color: #ddd;
+}
+
+.start-label {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 13px;
+    color: #ccc;
+}
+
+.start-input {
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid #555;
+    background: #111;
+    color: #fff;
+    font-size: 14px;
+    outline: none;
+}
+
+.start-input:focus {
+    border-color: #4caf50;
+    box-shadow: 0 0 0 1px rgba(76, 175, 80, 0.5);
+}
+
+.start-button {
+    margin-top: 16px;
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 999px;
+    border: none;
+    background: linear-gradient(135deg, #4caf50, #8bc34a);
+    color: #000;
+    font-weight: 600;
+    font-size: 15px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+}
+
+.start-button:hover {
+    filter: brightness(1.08);
+}
+
+.start-button:active {
+    filter: brightness(0.95);
+}

@@ -2,40 +2,51 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <link rel="stylesheet" href="/assets/styles.css">
     <title>Arena Dash</title>
-    <style>
-      /* На время прототипа растягиваем canvas на окно. */
-      html,
-      body {
-        margin: 0;
-        padding: 0;
-        height: 100%;
-        overflow: hidden;
-        background: #111;
-        color: #fff;
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-      }
 
-      #game {
-        display: block;
-        margin: 0;
-        background: #202020;
-      }
-
-      .overlay {
-        position: fixed;
-        left: 8px;
-        top: 8px;
-        padding: 4px 8px;
-        background: rgba(0, 0, 0, 0.4);
-        border-radius: 4px;
-        font-size: 12px;
-      }
-    </style>
   </head>
   <body>
     <canvas id="game"></canvas>
+
     <div class="overlay" id="ws-status">WS: disconnected</div>
+
+    <!-- Стартовый экран -->
+    <div class="start-screen" id="start-screen">
+      <div class="start-card">
+        <h1 class="start-title">Arena Dash: Fight Club</h1>
+        <p class="start-subtitle">
+          Онлайн-арена ближнего боя: сталкивайся с соперниками, собирай бусты,
+          выживай и забирай лидерборд.
+        </p>
+
+        <div class="start-section">
+          <h2>Как играть</h2>
+          <ul class="start-list">
+            <li>WASD или стрелки — движение по арене.</li>
+            <li>Собирай монстров‑pickup’ы — они дают очки и бафы.</li>
+            <li>Тарань других бойцов — сильные удары дают доп. очки.</li>
+            <li>Матч длится 60 секунд, затем начинается новый раунд.</li>
+          </ul>
+        </div>
+
+        <div class="start-section">
+          <label class="start-label" for="nickname-input">Никнейм</label>
+          <input
+            id="nickname-input"
+            class="start-input"
+            type="text"
+            maxlength="16"
+            placeholder="Введите никнейм"
+          />
+        </div>
+
+        <button id="start-button" class="start-button">
+          Начать бой
+        </button>
+      </div>
+    </div>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

@@ -1,3 +1,4 @@
+// import './styles.css';
 /**
  * (Sprint 2)
  *
@@ -49,12 +50,15 @@ type ServerToClientMessage =
         x: number;
         y: number;
         score: number;
+        speedMultiplier: number;
+        shieldTicks: number;
       }>;
       pickups: Array<{
         id: string;
         x: number;
         y: number;
         value: number;
+        kind: 'speed' | 'shield';
       }>;
     }
   | {
@@ -64,7 +68,7 @@ type ServerToClientMessage =
     };
 
 type ClientToServerMessage =
-  | { type: 'join'; nickname: string }
+  | { type: 'join'; nickname: string | null }
   | { type: 'input'; input: { dx: number; dy: number } };
 
 type RenderPlayer = {
@@ -80,6 +84,11 @@ let renderPlayers = new Map<string, RenderPlayer>();
 
 const canvas = document.getElementById('game') as HTMLCanvasElement | null;
 const wsStatusEl = document.getElementById('ws-status');
+const startScreenEl = document.getElementById('start-screen');
+const nicknameInputEl = document.getElementById('nickname-input') as HTMLInputElement | null;
+const startButtonEl = document.getElementById('start-button') as HTMLButtonElement | null;
+
+let currentNickname: string | null = null;
 
 if (!canvas) {
   throw new Error('Canvas element #game not found');
@@ -120,6 +129,11 @@ function sendMessage(msg: ClientToServerMessage) {
 }
 
 function connectWebSocket() {
+  if (!currentNickname) {
+    console.warn('[WS] cannot connect without nickname');
+    return;
+  }
+
   const url = 'ws://localhost:3000';
   console.log('[WS] Connecting to', url);
   setWsStatus('connecting...', 'orange');
@@ -132,7 +146,7 @@ function connectWebSocket() {
 
     const joinMsg: ClientToServerMessage = {
       type: 'join',
-      nickname
+      nickname: currentNickname
     };
     sendMessage(joinMsg);
   });
@@ -160,7 +174,25 @@ function connectWebSocket() {
     if (msg.type === 'state') {
       currentMatchId = msg.matchId;
       timeLeft = msg.timeLeft;
+      players = msg.players;
       pickups = msg.pickups;
+
+      const me = myPlayerId ? players.find((p) => p.id === myPlayerId) : null;
+
+      if (me) {
+        for (const other of players) {
+          if (other.id === me.id) continue;
+          const dx = other.x - me.x;
+          const dy = other.y - me.y;
+          const distSq = dx * dx + dy * dy;
+          const hitRadius = 40;
+          if (distSq < hitRadius * hitRadius) {
+            // триггерим небольшой shake
+            triggerShake(0.15, 6);
+            break;
+          }
+        }
+      }
 
       for (const sp of msg.players) {
         let rp = renderPlayers.get(sp.id);
@@ -190,6 +222,7 @@ function connectWebSocket() {
       }
 
       players = msg.players;
+
       return;
     }
 
@@ -221,6 +254,10 @@ function connectWebSocket() {
   socket.addEventListener('close', (event) => {
     console.log('[WS] closed', event.code, event.reason);
     setWsStatus('disconnected', 'red');
+    // Показываем стартовый экран с уже введённым ником
+    if (startScreenEl) {
+      startScreenEl.style.display = 'flex';
+    }    
     setTimeout(connectWebSocket, 2000);
   });
 
@@ -231,7 +268,7 @@ function connectWebSocket() {
 }
 
 // сразу подключаемся
-connectWebSocket();
+// connectWebSocket();
 
 // Игроки, пришедшие со state от сервера.
 let players = [] as Array<{
@@ -240,6 +277,8 @@ let players = [] as Array<{
   x: number;
   y: number;
   score: number;
+  speedMultiplier: number;
+  shieldTicks: number;
 }>;
 
 let pickups = [] as Array<{
@@ -247,6 +286,7 @@ let pickups = [] as Array<{
   x: number;
   y: number;
   value: number;
+  kind: 'speed' | 'shield';
 }>;
 
 let currentMatchId: number | null = null;
@@ -265,8 +305,33 @@ const inputState = {
   right: false
 };
 
-// Никнейм для join.
-const nickname = `Player${Math.floor(Math.random() * 1000)}`;
+// Никнейм для join
+// const nickname = `Player${Math.floor(Math.random() * 1000)}`;
+
+// Camera‑shake при столкновении: состояние и функция изменения
+let shakeTime = 0;
+let shakeMagnitude = 0;
+
+function triggerShake(duration: number, magnitude: number) {
+  shakeTime = duration;
+  shakeMagnitude = magnitude;
+}
+
+if (startButtonEl) {
+  startButtonEl.addEventListener('click', () => {
+    if (!nicknameInputEl) return;
+
+    const raw = nicknameInputEl.value.trim();
+    const value = raw || `Fighter${Math.floor(Math.random() * 1000)}`;
+    currentNickname = value.slice(0, 16);
+
+    if (startScreenEl) {
+      startScreenEl.style.display = 'none';
+    }
+
+    connectWebSocket();
+  });
+}
 
 // ---------------------- Рендер ----------------------
 function gameLoop() {
@@ -291,6 +356,23 @@ function draw() {
 
   const sortedPlayers = [...players].sort((a, b) => b.score - a.score);
 
+  // Рассчитываем смещение для shake
+  let shakeOffsetX = 0;
+  let shakeOffsetY = 0;
+
+  if (shakeTime > 0) {
+    shakeTime -= 1 / 60; // считаем, что draw ~60 FPS
+    const intensity = shakeMagnitude * (shakeTime > 0 ? shakeTime : 0);
+    shakeOffsetX = (Math.random() - 0.5) * intensity;
+    shakeOffsetY = (Math.random() - 0.5) * intensity;
+  } else {
+    shakeTime = 0;
+  }
+
+  // Применяем трансформацию к сцене
+  ctx.save();
+  ctx.translate(shakeOffsetX, shakeOffsetY);
+
 //   for (const p of sortedPlayers) {
 //     const isMe = p.id === myPlayerId;
 
@@ -309,6 +391,7 @@ function draw() {
 
   for (const rp of renderPlayers.values()) {
     const isMe = rp.id === myPlayerId;
+    const baseRadius = isMe ? 26 : 22;
     const img = fighterImages[rp.skinIndex] ?? null;
     const radius = isMe ? 26 : 22;
 
@@ -337,13 +420,37 @@ function draw() {
       ctx.stroke();
     }
 
+    if (isMe) {
+      const meState = players.find((p) => p.id === rp.id);
+      if (meState) {
+        if (meState.speedMultiplier > 1.01) {
+          // эффект скорости — пульсирующее кольцо
+          const t = Date.now() * 0.01;
+          const pulse = 2 * Math.sin(t) + 4;
+          ctx.beginPath();
+          ctx.arc(rp.x, rp.y, baseRadius + 6 + pulse, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(255, 152, 0, 0.6)';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+        if (meState.shieldTicks > 0) {
+          // щит — голубая аура
+          ctx.beginPath();
+          ctx.arc(rp.x, rp.y, baseRadius + 10, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(3, 169, 244, 0.8)';
+          ctx.lineWidth = 3;
+          ctx.stroke();
+        }
+      }
+    }
+
     ctx.fillStyle = '#ffffff';
     ctx.font = '12px system-ui';
     ctx.textAlign = 'center';
     ctx.fillText(rp.nickname, rp.x, rp.y - radius - 6);
   }
 
-  // Leaderboard (как раньше).
+  // Leaderboard
   const boardX = canvas.width - 220;
   const boardY = 60;
   ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
@@ -402,6 +509,14 @@ function draw() {
         ctx.save();
         ctx.beginPath();
         ctx.arc(pk.x, pk.y, radius, 0, Math.PI * 2);
+        ctx.fillStyle = pk.kind === 'speed' ? '#ff5722' : '#00bcd4';
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.stroke();
+        ctx.fillStyle = '#000000';
+        ctx.font = '14px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(pk.kind === 'speed' ? '⚡' : '🛡', pk.x, pk.y + 5);        
         ctx.closePath();
         ctx.clip();
         ctx.drawImage(img, pk.x - radius, pk.y - radius, size, size);
@@ -462,6 +577,7 @@ function draw() {
         oy + 94
     );
   }
+  ctx.restore();
 }
 
 // ---------------------- Обработка инпута (WASD / стрелки) ----------------------
